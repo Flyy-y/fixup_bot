@@ -1,0 +1,153 @@
+name: CI/CD
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  lint-test:
+    name: Lint & unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt ruff
+
+      - name: Ruff lint
+        run: ruff check .
+
+      - name: Unit tests with coverage gate on the transform logic
+        run: |
+          python -m pytest \
+            --cov=src.url_transform \
+            --cov-report=term-missing \
+            --cov-fail-under=100
+
+  security:
+    name: Security scans
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history so gitleaks can scan past commits
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: gitleaks (secret detection)
+        run: |
+          GL_VERSION=8.18.4
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GL_VERSION}/gitleaks_${GL_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /usr/local/bin gitleaks
+          gitleaks detect --source . --config .gitleaks.toml --redact --verbose --no-banner
+
+      - name: pip-audit (dependency vulnerabilities)
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt
+
+      - name: Semgrep SAST
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: >-
+            p/python
+            p/security-audit
+            p/dockerfile
+            p/secrets
+
+      - name: hadolint (Dockerfile lint)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+  build:
+    name: Build & publish multi-arch image
+    runs-on: ubuntu-latest
+    needs: [lint-test, security]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        # Only authenticate/push on branch/tag pushes, never on PRs (no fork access).
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata (tags & labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push (linux/amd64, linux/arm64)
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build amd64 image locally for Trivy image scan
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: fixupx-bot:scan
+          cache-from: type=gha
+
+      - name: Trivy image scan (fail on CRITICAL)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: fixupx-bot:scan
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
