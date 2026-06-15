@@ -1,0 +1,36 @@
+# Secrets — NEVER commit these
+.env
+.env.*
+!.env.example
+*.token
+secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.venv/
+venv/
+env/
+build/
+dist/
+
+# Local-only test artifacts (proxy CA, throwaway Dockerfiles) — never commit
+proxy-ca.crt
+*.crt
+Dockerfile.localtest
+Dockerfile.*test
+
+# Tooling / OS
+.mypy_cache/
+.ruff_cache/
+*.log
+.DS_Store
+.idea/
+.vscode/
+trivy-results.sarif

@@ -1,0 +1,21 @@
+# gitleaks configuration. Extends the default ruleset and adds an explicit
+# rule for Discord bot tokens so the CI fails hard if one is ever committed.
+[extend]
+useDefault = true
+
+[[rules]]
+id = "discord-bot-token"
+description = "Discord Bot Token"
+# Discord tokens look like: <base64 user id>.<base64 timestamp>.<hmac>
+regex = '''(?i)[MN][A-Za-z\d_-]{23,28}\.[A-Za-z\d_-]{6,7}\.[A-Za-z\d_-]{27,40}'''
+keywords = ["token", "discord"]
+
+[allowlist]
+description = "Allow placeholder/example values"
+regexes = [
+  '''your-discord-bot-token-here''',
+]
+paths = [
+  '''\.env\.example$''',
+  '''README\.md$''',
+]
