@@ -139,7 +139,11 @@ class FixupClient(discord.Client):
             kwargs = dict(
                 content=content,
                 username=author.display_name,
-                avatar_url=author.display_avatar.url,
+                # Force a static PNG frame of the avatar. Discord's per-message
+                # webhook avatar_url override does not render animated (a_*.gif)
+                # avatars and shows blank for them, so animated avatars must be
+                # requested as PNG. This is a no-op for already-static avatars.
+                avatar_url=author.display_avatar.with_format("png").url,
                 allowed_mentions=discord.AllowedMentions.none(),
                 wait=True,
             )
