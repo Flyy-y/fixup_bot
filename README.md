@@ -12,8 +12,12 @@ look and feel of the conversation.
 ## How it works
 
 - Detects `http(s)://x.com/...` and `http(s)://www.x.com/...` links (host match
-  is case-insensitive). Only the **host** is rewritten; scheme, `www.` prefix,
-  port, path, query string and fragment are preserved.
+  is case-insensitive). The **host** is rewritten and the scheme, `www.` prefix,
+  port and path are preserved.
+- **Strips tracking.** The query string and fragment are removed, since on X
+  they only carry tracking/source data (`?s=20`, `?t=…`, `?ref_src=twsrc%5Etfw`,
+  `?cxt=…`). Only the content (the tweet path) is kept — e.g.
+  `https://x.com/jack/status/20?s=20` → `https://fixupx.com/jack/status/20`.
 - Handles multiple links in a single message.
 - Rewrites only genuine `x.com` hosts. Look-alikes such as `xx.com`,
   `max.com`, `x.com.evil.com`, `fixupx.com` and `x.com` appearing inside a path

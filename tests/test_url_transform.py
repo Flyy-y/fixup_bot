@@ -27,17 +27,18 @@ class TestTransformBasic:
     def test_bare_host_no_path(self):
         assert transform_text("https://x.com") == "https://fixupx.com"
 
-    def test_query_string_preserved(self):
+    def test_query_string_stripped(self):
+        # The whole query string (tracking) is removed; only the path is kept.
         assert transform_text("https://x.com/i/web?foo=bar&baz=1") == (
-            "https://fixupx.com/i/web?foo=bar&baz=1"
+            "https://fixupx.com/i/web"
         )
 
-    def test_query_without_path(self):
-        assert transform_text("https://x.com?ref=home") == "https://fixupx.com?ref=home"
+    def test_query_without_path_stripped(self):
+        assert transform_text("https://x.com?ref=home") == "https://fixupx.com"
 
-    def test_fragment_preserved(self):
+    def test_fragment_stripped(self):
         assert transform_text("https://x.com/page#section") == (
-            "https://fixupx.com/page#section"
+            "https://fixupx.com/page"
         )
 
     def test_port_preserved(self):
@@ -64,11 +65,54 @@ class TestCaseInsensitivity:
         assert transform_text(src) == expected
 
 
+class TestTrackingStripped:
+    """Real-world X share URLs: the query is pure tracking and must be removed."""
+
+    @pytest.mark.parametrize(
+        "src,expected",
+        [
+            # ?s=20 is the "share source" tracker appended by the X app.
+            (
+                "https://x.com/jack/status/20?s=20",
+                "https://fixupx.com/jack/status/20",
+            ),
+            # ?t=… session token plus ?s=… source.
+            (
+                "https://x.com/user/status/123?t=AbCdEf123&s=19",
+                "https://fixupx.com/user/status/123",
+            ),
+            # ?ref_src=twsrc%5Etfw referral tracking from embeds.
+            (
+                "https://www.x.com/user/status/9?ref_src=twsrc%5Etfw",
+                "https://www.fixupx.com/user/status/9",
+            ),
+            # ?cxt=… expanded-context tracker.
+            (
+                "https://x.com/i/web/status/5?cxt=HHwWgsest",
+                "https://fixupx.com/i/web/status/5",
+            ),
+            # Path with photo index is kept (it's content, not query).
+            (
+                "https://x.com/user/status/7/photo/1?s=20",
+                "https://fixupx.com/user/status/7/photo/1",
+            ),
+        ],
+    )
+    def test_tracking_removed(self, src, expected):
+        assert transform_text(src) == expected
+
+
 class TestMultipleLinks:
     def test_two_links(self):
         src = "first https://x.com/a then https://www.x.com/b end"
         assert transform_text(src) == (
             "first https://fixupx.com/a then https://www.fixupx.com/b end"
+        )
+
+    def test_two_links_both_detracked(self):
+        src = "https://x.com/a/status/1?s=20 and https://x.com/b/status/2?t=xyz"
+        assert transform_text(src) == (
+            "https://fixupx.com/a/status/1 and https://fixupx.com/b/status/2"
         )
 
     def test_three_links_mixed(self):
@@ -144,3 +188,12 @@ class TestEdgeCases:
     def test_angle_bracket_wrapped(self):
         # Discord users sometimes wrap links in <> to suppress embeds.
         assert transform_text("<https://x.com/a>") == "<https://fixupx.com/a>"
+
+    def test_angle_bracket_wrapped_with_tracking(self):
+        # The angle bracket terminates the URL; the query is still stripped.
+        assert transform_text("<https://x.com/a?s=20>") == "<https://fixupx.com/a>"
+
+    def test_link_with_tracking_in_sentence(self):
+        assert transform_text("look https://x.com/u/status/1?s=20 wow") == (
+            "look https://fixupx.com/u/status/1 wow"
+        )
