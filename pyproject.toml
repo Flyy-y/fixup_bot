@@ -1,0 +1,21 @@
+[project]
+name = "fixupx-bot"
+version = "1.0.0"
+description = "Discord bot that rewrites x.com links to fixupx.com for working embeds."
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+# The live smoke test is local-only and must never run in the default suite/CI.
+python_files = ["test_*.py"]
+
+[tool.coverage.run]
+source = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

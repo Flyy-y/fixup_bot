@@ -1,0 +1,1 @@
+"""fixupx Discord bot package."""
