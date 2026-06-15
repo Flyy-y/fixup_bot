@@ -112,6 +112,23 @@ GitHub Actions runs on every push and pull request:
    then scanned with Trivy (fails on critical vulnerabilities). Images are
    published only on branch/tag pushes, not on pull requests.
 
+### Activating the pipeline
+
+The pipeline lives at [`.ci/ci.yml`](.ci/ci.yml). It is parked there because the
+automation credentials that created this branch lack the GitHub `workflow`
+scope, so files cannot be committed under `.github/workflows/` from that
+context. To activate CI, move it once from an account that has the scope (any
+normal `git push` from your machine does):
+
+```bash
+git mv .ci/ci.yml .github/workflows/ci.yml
+git commit -m "ci: activate pipeline"
+git push
+```
+
+Once on the default branch, the multi-arch image is published to
+`ghcr.io/flyy-y/fixup_bot` automatically.
+
 ## License
 
 MIT
